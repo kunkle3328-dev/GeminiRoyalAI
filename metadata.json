@@ -1,0 +1,7 @@
+{
+  "name": "Gemini Royal AI",
+  "description": "A personal flagship AI assistant with real-time text and live voice capabilities, featuring a royal blue professional aesthetic.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
