@@ -1,11 +1,30 @@
 
 export type Role = 'user' | 'assistant' | 'system';
+export type AppMode = 'chat' | 'voice';
+export type VoiceStatus = 'idle' | 'armed' | 'listening' | 'processing' | 'speaking' | 'error';
+
+export interface FileAttachment {
+  name: string;
+  type: string;
+  size: number;
+  data?: string;
+  previewUrl?: string;
+}
+
+export interface GroundingChunk {
+  web?: {
+    uri: string;
+    title: string;
+  };
+}
 
 export interface Message {
   id: string;
   role: Role;
   content: string;
   timestamp: number;
+  attachments?: FileAttachment[];
+  groundingChunks?: GroundingChunk[];
 }
 
 export interface Conversation {
@@ -60,3 +79,6 @@ export const MODELS = [
 
 export const VOICE_NAMES = ['Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir'] as const;
 export type VoiceName = (typeof VOICE_NAMES)[number];
+
+export type PersonalityType = 'Professional' | 'Friendly' | 'Analytical' | 'Calm' | 'Confident';
+export const PERSONALITIES: PersonalityType[] = ['Professional', 'Friendly', 'Analytical', 'Calm', 'Confident'];

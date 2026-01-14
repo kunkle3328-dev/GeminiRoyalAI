@@ -1,213 +1,117 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Mic, MicOff, Volume2, VolumeX, MessageCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Mic, MicOff, Volume2, VolumeX, MessageCircle, Sparkles, Activity } from 'lucide-react';
+import { PersonalityType, VoiceStatus } from '../types';
 
 interface VoiceOverlayProps {
   onClose: () => void;
-  status: 'connecting' | 'listening' | 'speaking' | 'idle';
+  status: VoiceStatus;
   userText: string;
   aiText: string;
   transcript?: { role: 'user' | 'assistant', text: string }[];
   onToggleMute?: (muted: boolean) => void;
   onToggleOutputMute?: (muted: boolean) => void;
+  personality?: PersonalityType;
 }
 
 const VoiceOverlay: React.FC<VoiceOverlayProps> = ({ 
-  onClose, 
-  status, 
-  userText, 
-  aiText, 
-  transcript = [],
-  onToggleMute,
-  onToggleOutputMute
+  onClose, status, userText, aiText, transcript = [], onToggleMute, onToggleOutputMute, personality = 'Professional'
 }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [isOutputMuted, setIsOutputMuted] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [transcript, userText, aiText]);
+  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [transcript, userText, aiText]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
+    let frame = 0;
     let animationId: number;
-    let offset = 0;
-
     const render = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const width = canvas.width;
-      const height = canvas.height;
-      
-      const drawWave = (color: string, amp: number, freq: number, off: number, lineWidth: number) => {
-        ctx.beginPath();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = lineWidth;
-        ctx.lineCap = 'round';
-        for (let x = 0; x < width; x++) {
-          const y = height / 2 + Math.sin(x * freq + off) * amp;
-          if (x === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+      const w = canvas.width, h = canvas.height;
+      const drawLayer = (color: string, amp: number, freq: number, off: number, width: number) => {
+        ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round';
+        for (let x = 0; x < w; x++) {
+          const y = h / 2 + Math.sin(x * freq + off) * amp * Math.exp(-Math.pow(x - w / 2, 2) / (w * w / 16));
+          if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.stroke();
       };
-
-      const baseAmp = status === 'idle' ? 4 : (status === 'speaking' ? 45 : 20);
-      
-      drawWave('rgba(30, 64, 175, 0.15)', baseAmp * 0.4, 0.012, offset * 0.4, 2);
-      drawWave('rgba(59, 130, 246, 0.25)', baseAmp * 0.7, 0.022, -offset * 0.6, 1.5);
-      drawWave('#3b82f6', baseAmp, 0.028, offset, 4);
-
-      offset += status === 'idle' ? 0.015 : 0.07;
+      const intensity = status === 'speaking' ? 60 : (status === 'listening' ? 25 : 5);
+      drawLayer('rgba(59, 130, 246, 0.1)', intensity * 0.4, 0.01, frame * 0.02, 2);
+      drawLayer('rgba(59, 130, 246, 0.3)', intensity * 0.8, 0.015, -frame * 0.03, 3);
+      drawLayer('#3b82f6', intensity, 0.02, frame * 0.05, 5);
+      frame++;
       animationId = requestAnimationFrame(render);
     };
-
     render();
     return () => cancelAnimationFrame(animationId);
   }, [status]);
 
-  const toggleMute = () => {
-    const next = !isMuted;
-    setIsMuted(next);
-    onToggleMute?.(next);
-  };
-
-  const toggleOutputMute = () => {
-    const next = !isOutputMuted;
-    setIsOutputMuted(next);
-    onToggleOutputMute?.(next);
-  };
-
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center animate-in fade-in duration-500 overflow-hidden safe-top safe-bottom">
-      {/* Background Layer */}
-      <div className="absolute inset-0 bg-[#0b0f1a]/98 backdrop-blur-3xl" />
+    <motion.div 
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[600] flex flex-col bg-[#070a13]/98 backdrop-blur-3xl overflow-hidden"
+    >
+      <motion.div 
+        animate={{ scale: status === 'speaking' ? [1, 1.1, 1] : 1, opacity: [0.15, 0.25, 0.15] }} 
+        transition={{ duration: 4, repeat: Infinity }}
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-blue-600/30 blur-[160px] pointer-events-none" 
+      />
       
-      {/* Glow Effects */}
-      <div className={`absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-[140px] transition-all duration-1000 ${
-        status === 'listening' ? 'bg-blue-600/15' : 
-        status === 'speaking' ? 'bg-indigo-600/25' : 
-        'bg-white/5'
-      }`} />
-
-      {/* Header Area */}
-      <header className="relative w-full flex justify-between items-center z-10 p-6 sm:p-8 shrink-0">
+      <header className="p-8 flex justify-between items-center z-10 safe-top">
         <div className="flex items-center gap-4">
-          <div className="glass px-4 py-2 rounded-full flex items-center gap-2.5 border border-white/5">
-             <div className={`w-2.5 h-2.5 rounded-full ${
-              status === 'connecting' ? 'bg-yellow-400 animate-pulse' :
-              status === 'listening' ? 'bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.7)]' :
-              status === 'speaking' ? 'bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.7)]' : 'bg-gray-600'
-            }`} />
-            <span className="text-[11px] font-bold text-gray-200 uppercase tracking-[0.2em]">
-              {status}
-            </span>
+          <div className="w-12 h-12 glass-royal rounded-2xl flex items-center justify-center border border-blue-500/20"><Sparkles size={24} className="text-blue-400" /></div>
+          <div>
+             <h2 className="text-lg font-bold text-white tracking-tight">Gemini Royal Live</h2>
+             <div className="flex items-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full ${status === 'listening' ? 'bg-red-500 shadow-[0_0_8px_red]' : 'bg-blue-500 animate-pulse shadow-[0_0_8px_blue]'}`} />
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{status} • {personality}</span>
+             </div>
           </div>
         </div>
-        <button 
-          onClick={onClose}
-          className="p-3 glass-interactive hover:bg-white/10 rounded-full transition-all text-gray-400 hover:text-white"
-        >
-          <X size={22} />
-        </button>
+        <button onClick={onClose} className="p-4 glass-interactive rounded-full text-gray-400 hover:text-white transition-all active:scale-90"><X size={28} /></button>
       </header>
 
-      {/* Main Content: Waveform & Transcript */}
-      <div className="relative flex-1 flex flex-col items-center justify-start w-full max-w-2xl px-6 z-10 overflow-hidden">
-        {/* Waveform Area */}
-        <div className="w-full shrink-0 flex items-center justify-center py-8">
-          <canvas 
-            ref={canvasRef} 
-            width={800} 
-            height={200} 
-            className="w-full h-32 sm:h-48 opacity-90 drop-shadow-[0_0_20px_rgba(59,130,246,0.5)]"
-          />
+      <div className="flex-1 flex flex-col items-center justify-center w-full px-6 gap-12 z-10 overflow-hidden">
+        <div className="w-full flex items-center justify-center max-w-3xl relative">
+          <canvas ref={canvasRef} width={1000} height={400} className="w-full h-48 sm:h-64 drop-shadow-[0_0_30px_rgba(59,130,246,0.6)]" />
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+             <div className="w-24 h-24 rounded-full glass border border-blue-500/10 flex items-center justify-center"><Activity size={32} className="text-blue-500 opacity-20" /></div>
+          </div>
         </div>
 
-        {/* Transcript Area (Chatbox style) */}
-        <div className="w-full flex-1 overflow-y-auto scrollbar-hide flex flex-col space-y-4 pb-8 mask-fade">
-          {transcript.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-              <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-[14px] leading-relaxed ${
-                msg.role === 'user' 
-                ? 'bg-blue-600/20 text-blue-100 border border-blue-500/20 rounded-tr-none' 
-                : 'glass text-gray-300 border border-white/5 rounded-tl-none'
-              }`}>
-                {msg.text}
-              </div>
-            </div>
+        <div ref={scrollRef} className="w-full max-w-2xl h-[30vh] overflow-y-auto scrollbar-hide flex flex-col gap-4 py-8 mask-fade">
+          {transcript.map((m, i) => (
+            <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`px-5 py-3 rounded-2xl text-sm leading-relaxed max-w-[85%] ${m.role === 'user' ? 'bg-blue-600/10 text-blue-300 border border-blue-500/10' : 'glass border border-white/5 text-gray-200'}`}>{m.text}</div>
+            </motion.div>
           ))}
-          
-          {/* Active Utterances */}
-          {userText && (
-            <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2">
-               <div className="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-tr-none bg-blue-600/40 text-blue-100 border border-blue-400/30 text-[14px] italic">
-                {userText}
-              </div>
-            </div>
-          )}
-          {aiText && (
-            <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2">
-               <div className="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-tl-none glass border border-blue-500/40 text-gray-100 text-[16px] font-medium shadow-2xl">
-                {aiText}
-              </div>
-            </div>
-          )}
-          <div ref={transcriptEndRef} />
+          {userText && <div className="flex justify-end"><div className="px-5 py-3 rounded-2xl bg-blue-600/20 text-blue-200 text-sm font-medium italic animate-pulse">{userText}</div></div>}
+          {aiText && <div className="flex justify-start"><div className="px-6 py-4 rounded-[2rem] glass border border-blue-500/30 text-white text-[16px] font-bold shadow-2xl tracking-tight leading-tight">{aiText}</div></div>}
         </div>
       </div>
 
-      {/* Controls Footer */}
-      <footer className="relative flex flex-col items-center gap-6 p-8 z-10 shrink-0 w-full max-w-lg">
-        <div className="flex items-center justify-between w-full">
-          <button 
-            onClick={toggleMute}
-            className={`p-4 rounded-full transition-all glass-interactive hover:scale-110 active:scale-95 ${
-              isMuted ? 'text-red-400 border-red-500/40 bg-red-500/5' : 'text-gray-400 border-white/10'
-            }`}
-          >
-            {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
-          </button>
+      <footer className="p-12 flex flex-col items-center gap-8 z-10 safe-bottom">
+        <div className="flex items-center gap-12 sm:gap-16">
+          <button onClick={() => { setIsMuted(!isMuted); onToggleMute?.(!isMuted); }} className={`p-6 rounded-full glass-interactive border ${isMuted ? 'border-red-500/50 text-red-400 bg-red-500/10' : 'border-white/5 text-gray-400'} transition-all hover:scale-110`}>{isMuted ? <MicOff size={28} /> : <Mic size={28} />}</button>
           
-          <div className="relative group cursor-pointer" onClick={() => { /* Tap to interrupt handled in App */ }}>
-            <div className={`absolute inset-0 bg-blue-600 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity ${status === 'speaking' ? 'animate-pulse' : ''}`} />
-            <div className={`w-20 h-20 sm:w-24 sm:h-24 glass-royal rounded-full flex items-center justify-center text-blue-400 shadow-2xl transition-all border border-blue-500/40 ${
-              status === 'speaking' ? 'scale-110' : 'scale-100'
-            }`}>
-              <Volume2 size={36} className={status === 'speaking' ? 'animate-pulse' : ''} />
-            </div>
+          <div className="relative group">
+            <div className={`absolute inset-0 bg-blue-500/20 rounded-full blur-3xl scale-[2] transition-opacity duration-1000 ${status === 'speaking' ? 'opacity-100' : 'opacity-0'}`} />
+            <div className={`w-24 h-24 rounded-full glass-royal border border-blue-500/40 flex items-center justify-center transition-all duration-500 ${status === 'speaking' ? 'scale-110 shadow-[0_0_50px_rgba(59,130,246,0.5)]' : 'scale-100 shadow-2xl'}`}><Volume2 size={40} className={`text-blue-400 ${status === 'speaking' ? 'animate-pulse' : ''}`} /></div>
           </div>
 
-          <button 
-            onClick={toggleOutputMute}
-            className={`p-4 rounded-full transition-all glass-interactive hover:scale-110 active:scale-95 ${
-              isOutputMuted ? 'text-red-400 border-red-500/40 bg-red-500/5' : 'text-gray-400 border-white/10'
-            }`}
-          >
-            {isOutputMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
-          </button>
+          <button onClick={() => { setIsOutputMuted(!isOutputMuted); onToggleOutputMute?.(!isOutputMuted); }} className={`p-6 rounded-full glass-interactive border ${isOutputMuted ? 'border-red-500/50 text-red-400 bg-red-500/10' : 'border-white/5 text-gray-400'} transition-all hover:scale-110`}>{isOutputMuted ? <VolumeX size={28} /> : <Volume2 size={28} />}</button>
         </div>
-        
-        <div className="flex items-center gap-2 opacity-40">
-           <MessageCircle size={12} className="text-blue-400" />
-           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">
-             Transcript Active
-           </p>
-        </div>
+        <div className="flex items-center gap-2 opacity-30"><MessageCircle size={14} /><span className="text-[10px] font-bold uppercase tracking-[0.3em]">Quantum Link Established</span></div>
       </footer>
-      
-      <style>{`
-        .mask-fade {
-          mask-image: linear-gradient(to bottom, transparent 0%, black 10%);
-          -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%);
-        }
-      `}</style>
-    </div>
+    </motion.div>
   );
 };
 
